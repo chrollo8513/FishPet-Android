@@ -6,16 +6,19 @@ import android.graphics.Color
 import android.graphics.LinearGradient
 import android.graphics.Paint
 import android.graphics.Path
+import android.graphics.RadialGradient
 import android.graphics.RectF
 import android.graphics.Shader
 import kotlin.math.max
+import kotlin.math.min
 import kotlin.math.sin
 
 object FishArt {
     private const val WIDTH = 720
     private const val HEIGHT = 400
+    private const val BOWL_RADIUS = 196f
     private const val BITMAP_WIDTH = 480
-    private const val BITMAP_HEIGHT = 267
+    private const val BITMAP_HEIGHT = 480
 
     fun render(
         state: FishState,
@@ -30,16 +33,21 @@ object FishArt {
     fun draw(canvas: Canvas, state: FishState, nowSeconds: Long, motionTimeMillis: Long, width: Float, height: Float) {
         val paint = Paint(Paint.ANTI_ALIAS_FLAG)
         canvas.save()
-        canvas.scale(width / WIDTH, height / HEIGHT)
-        val bounds = RectF(0f, 0f, WIDTH.toFloat(), HEIGHT.toFloat())
-        canvas.clipPath(Path().apply { addRoundRect(bounds, 42f, 42f, Path.Direction.CW) })
+        val scale = min(width / WIDTH, height / HEIGHT)
+        canvas.translate((width - WIDTH * scale) / 2f, (height - HEIGHT * scale) / 2f)
+        canvas.scale(scale, scale)
+        canvas.clipPath(Path().apply { addCircle(WIDTH / 2f, HEIGHT / 2f, BOWL_RADIUS, Path.Direction.CW) })
         drawWater(canvas, paint, state, nowSeconds, motionTimeMillis)
         drawScenery(canvas, paint, motionTimeMillis)
         drawBubbles(canvas, paint, motionTimeMillis)
         drawFood(canvas, paint, state, nowSeconds, motionTimeMillis)
-        drawFish(canvas, paint, state, motionTimeMillis)
+        val fish = drawFish(canvas, paint, state, motionTimeMillis)
+        drawCareBadges(canvas, paint, state, fish.pose, fish.bodyHeight)
+        drawBowlRim(canvas, paint)
         canvas.restore()
     }
+
+    private data class RenderedFish(val pose: SwimmingPose, val bodyHeight: Float)
 
     private fun drawWater(canvas: Canvas, paint: Paint, state: FishState, nowSeconds: Long, motionTimeMillis: Long) {
         paint.shader = LinearGradient(0f, 0f, 0f, HEIGHT.toFloat(), intArrayOf(
@@ -133,7 +141,7 @@ object FishArt {
         }
     }
 
-    private fun drawFish(canvas: Canvas, paint: Paint, state: FishState, motionTimeMillis: Long) {
+    private fun drawFish(canvas: Canvas, paint: Paint, state: FishState, motionTimeMillis: Long): RenderedFish {
         val stageScale = when (state.stage()) {
             GrowthStage.BABY -> .62f
             GrowthStage.JUVENILE -> .82f
@@ -183,18 +191,69 @@ object FishArt {
         }, paint)
         canvas.restore()
 
-        paint.color = bodyColor
+        paint.color = Color.argb(58, 2, 42, 63)
+        canvas.drawOval(-bodyWidth * .58f, -bodyHeight * .43f + 7f, bodyWidth * .72f, bodyHeight * .57f + 7f, paint)
+        paint.shader = RadialGradient(
+            bodyWidth * .24f,
+            -bodyHeight * .25f,
+            max(bodyWidth, bodyHeight),
+            intArrayOf(blend(bodyColor, Color.WHITE, .56f), bodyColor, blend(bodyColor, Color.BLACK, .32f)),
+            floatArrayOf(0f, .52f, 1f),
+            Shader.TileMode.CLAMP,
+        )
         canvas.drawOval(-bodyWidth * .62f, -bodyHeight * .52f, bodyWidth * .70f, bodyHeight * .52f, paint)
+        paint.shader = null
         paint.color = Color.argb(92, 255, 230, 143)
         canvas.drawOval(-bodyWidth * .10f, -bodyHeight * .42f, bodyWidth * .58f, bodyHeight * .42f, paint)
         paint.color = Color.argb(120, 255, 255, 255)
         canvas.drawOval(bodyWidth * .10f, -bodyHeight * .38f, bodyWidth * .49f, -bodyHeight * .12f, paint)
 
         val eyeSize = if (state.stage() == GrowthStage.BABY) bodyHeight * .20f else bodyHeight * .16f
+        if (state.color == FishColor.KOI && !state.dead) {
+            paint.color = Color.argb(180, 252, 246, 226)
+            canvas.drawOval(-bodyWidth * .15f, -bodyHeight * .38f, bodyWidth * .16f, -bodyHeight * .06f, paint)
+            canvas.drawOval(bodyWidth * .12f, bodyHeight * .14f, bodyWidth * .43f, bodyHeight * .37f, paint)
+        }
         drawEye(canvas, paint, bodyWidth * .42f, -bodyHeight * .19f, eyeSize, state.dead)
         if (state.stage() == GrowthStage.BABY) drawEye(canvas, paint, bodyWidth * .20f, -bodyHeight * .24f, eyeSize * .78f, state.dead)
         drawExpression(canvas, paint, state, bodyWidth, bodyHeight)
         canvas.restore()
+        return RenderedFish(pose, bodyHeight)
+    }
+
+    private fun drawCareBadges(canvas: Canvas, paint: Paint, state: FishState, pose: SwimmingPose, bodyHeight: Float) {
+        val hud = FishHudLayout.position(pose, bodyHeight)
+        drawBadge(canvas, paint, hud.x - 104f, hud.y, "♥ ${state.health.toInt()}%", Color.rgb(222, 76, 98))
+        drawBadge(canvas, paint, hud.x + 4f, hud.y, "● ${state.hunger.toInt()}%", Color.rgb(245, 180, 57))
+    }
+
+    private fun drawBadge(canvas: Canvas, paint: Paint, left: Float, top: Float, text: String, color: Int) {
+        val badge = RectF(left, top, left + 100f, top + 28f)
+        paint.color = Color.argb(205, 4, 41, 66)
+        canvas.drawRoundRect(badge, 14f, 14f, paint)
+        paint.style = Paint.Style.STROKE
+        paint.strokeWidth = 2f
+        paint.color = color
+        canvas.drawRoundRect(badge, 14f, 14f, paint)
+        paint.style = Paint.Style.FILL
+        paint.color = Color.WHITE
+        paint.textAlign = Paint.Align.CENTER
+        paint.textSize = 13f
+        paint.typeface = android.graphics.Typeface.DEFAULT_BOLD
+        canvas.drawText(text, badge.centerX(), badge.centerY() + 5f, paint)
+        paint.typeface = android.graphics.Typeface.DEFAULT
+        paint.textAlign = Paint.Align.LEFT
+    }
+
+    private fun drawBowlRim(canvas: Canvas, paint: Paint) {
+        paint.style = Paint.Style.STROKE
+        paint.strokeWidth = 7f
+        paint.color = Color.argb(205, 218, 249, 255)
+        canvas.drawCircle(WIDTH / 2f, HEIGHT / 2f, BOWL_RADIUS - 3f, paint)
+        paint.strokeWidth = 2f
+        paint.color = Color.argb(130, 255, 255, 255)
+        canvas.drawCircle(WIDTH / 2f - 3f, HEIGHT / 2f - 3f, BOWL_RADIUS - 10f, paint)
+        paint.style = Paint.Style.FILL
     }
 
     private fun drawEye(canvas: Canvas, paint: Paint, x: Float, y: Float, radius: Float, dead: Boolean) {
@@ -229,10 +288,12 @@ object FishArt {
 
     private fun fishColor(state: FishState): Int = when {
         state.dead -> Color.rgb(128, 139, 145)
-        state.mood == FishMood.CRITICAL -> Color.rgb(181, 160, 131)
-        state.mood == FishMood.SAD -> Color.rgb(225, 185, 118)
-        else -> Color.rgb(255, 143, 45)
+        state.mood == FishMood.CRITICAL -> blend(baseColor(state), Color.rgb(181, 160, 131), .78f)
+        state.mood == FishMood.SAD -> blend(baseColor(state), Color.rgb(225, 185, 118), .62f)
+        else -> baseColor(state)
     }
+
+    private fun baseColor(state: FishState): Int = Color.rgb(state.color.red, state.color.green, state.color.blue)
 
     private fun blend(first: Int, second: Int, amount: Float): Int {
         val inverse = 1f - amount

@@ -11,6 +11,19 @@ enum class FishMood(val label: String) { HAPPY("Happy"), WORRIED("Worried"), SAD
 
 enum class FeedResult { NONE, FED, COOLDOWN, DEAD }
 
+enum class FishColor(val label: String, val red: Int, val green: Int, val blue: Int) {
+    ORANGE("Orange", 255, 143, 45),
+    GOLD("Gold", 247, 184, 55),
+    CORAL("Coral", 244, 103, 79),
+    PEARL("Pearl", 244, 222, 175),
+    KOI("Koi", 242, 116, 40);
+
+    companion object {
+        fun random(): FishColor = entries.random()
+        fun fromStorage(value: String): FishColor = entries.firstOrNull { it.name == value } ?: ORANGE
+    }
+}
+
 data class FishBalance(
     val hungerPerHour: Double = 3.0,
     val healthyGrowthPerHour: Double = 0.60,
@@ -25,6 +38,7 @@ data class FishBalance(
 
 data class FishState(
     val name: String = "Bubbles",
+    val color: FishColor = FishColor.ORANGE,
     val hunger: Double = 15.0,
     val health: Double = 100.0,
     val growth: Double = 0.0,
@@ -80,6 +94,17 @@ object FishSceneTiming {
     fun secondsUntilRefresh(state: FishState, nowSeconds: Long): Long? {
         val latestSceneEnd = max(state.feedingSceneUntilSeconds, state.playfulSceneUntilSeconds)
         return (latestSceneEnd - nowSeconds).takeIf { it > 0L }
+    }
+
+    fun nextRefreshAtSeconds(state: FishState, nowSeconds: Long): Long? {
+        if (state.isFeeding(nowSeconds)) {
+            val duration = max(1L, state.feedingSceneUntilSeconds - state.lastFedAtSeconds)
+            val frames = listOf(duration / 4L, duration / 2L, duration * 3L / 4L)
+                .map { state.lastFedAtSeconds + it }
+            frames.firstOrNull { it > nowSeconds }?.let { return it }
+        }
+        val latestSceneEnd = max(state.feedingSceneUntilSeconds, state.playfulSceneUntilSeconds)
+        return latestSceneEnd.takeIf { it > nowSeconds }
     }
 }
 
@@ -144,6 +169,17 @@ object FishSimulator {
     fun pet(initial: FishState, nowSeconds: Long): FishState {
         val advanced = advance(initial, nowSeconds)
         return if (advanced.dead) advanced else advanced.copy(playfulSceneUntilSeconds = nowSeconds + 8L)
+    }
+
+    fun newBaby(nowSeconds: Long, color: FishColor = FishColor.ORANGE): FishState = FishState(
+        color = color,
+        updatedAtSeconds = nowSeconds,
+        bornAtSeconds = nowSeconds,
+    )
+
+    fun rename(initial: FishState, proposedName: String): FishState {
+        val cleaned = proposedName.trim().take(18)
+        return if (cleaned.isBlank()) initial else initial.copy(name = cleaned)
     }
 
     private fun healthDeltaPerHour(hunger: Double): Double = when {

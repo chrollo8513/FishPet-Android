@@ -32,9 +32,17 @@ object FishStore {
     }
 
     @Synchronized
+    fun rename(context: Context, proposedName: String): FishState {
+        val preferences = context.getSharedPreferences(PREFERENCES, Context.MODE_PRIVATE)
+        val state = FishSimulator.rename(read(preferences.getString(KEY_STATE, null), nowSeconds()), proposedName)
+        persist(preferences.edit(), state)
+        return state
+    }
+
+    @Synchronized
     fun reset(context: Context, nowSeconds: Long = nowSeconds()): FishState {
         val preferences = context.getSharedPreferences(PREFERENCES, Context.MODE_PRIVATE)
-        val fresh = FishState(updatedAtSeconds = nowSeconds, bornAtSeconds = nowSeconds)
+        val fresh = FishSimulator.newBaby(nowSeconds, FishColor.random())
         persist(preferences.edit(), fresh)
         return fresh
     }
@@ -48,6 +56,7 @@ object FishStore {
         val updated = objectValue.optLong("updatedAtSeconds", objectValue.optLong("updated", fallbackNowSeconds))
         return FishState(
             name = objectValue.optString("name", "Bubbles").ifBlank { "Bubbles" },
+            color = FishColor.fromStorage(objectValue.optString("color", FishColor.ORANGE.name)),
             hunger = objectValue.optDouble("hunger", 15.0),
             health = objectValue.optDouble("health", 100.0),
             growth = objectValue.optDouble("growth", 0.0),
@@ -64,6 +73,7 @@ object FishStore {
     private fun persist(editor: android.content.SharedPreferences.Editor, state: FishState) {
         val value = JSONObject()
             .put("name", state.name)
+            .put("color", state.color.name)
             .put("hunger", state.hunger)
             .put("health", state.health)
             .put("growth", state.growth)

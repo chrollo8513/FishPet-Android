@@ -115,6 +115,16 @@ class FishSimulationTest {
     }
 
     @Test
+    fun `feeding schedules only a few event frames before restoring the normal pose`() {
+        val state = FishState(lastFedAtSeconds = 100L, feedingSceneUntilSeconds = 112L)
+
+        assertEquals(103L, FishSceneTiming.nextRefreshAtSeconds(state, nowSeconds = 100L))
+        assertEquals(106L, FishSceneTiming.nextRefreshAtSeconds(state, nowSeconds = 103L))
+        assertEquals(109L, FishSceneTiming.nextRefreshAtSeconds(state, nowSeconds = 106L))
+        assertEquals(112L, FishSceneTiming.nextRefreshAtSeconds(state, nowSeconds = 109L))
+    }
+
+    @Test
     fun `pet interaction creates a short playful scene only for living fish`() {
         val lively = FishSimulator.pet(FishState(updatedAtSeconds = 100L), nowSeconds = 100L)
         val dead = FishSimulator.pet(FishState(dead = true, health = 0.0, updatedAtSeconds = 100L), nowSeconds = 100L)
@@ -122,5 +132,23 @@ class FishSimulationTest {
         assertTrue(lively.isPlayful(107L))
         assertFalse(lively.isPlayful(108L))
         assertFalse(dead.isPlayful(101L))
+    }
+
+    @Test
+    fun `new baby keeps its chosen color and starts with fresh care values`() {
+        val baby = FishSimulator.newBaby(nowSeconds = 120L, color = FishColor.KOI)
+
+        assertEquals(FishColor.KOI, baby.color)
+        assertEquals("Bubbles", baby.name)
+        assertEquals(0.0, baby.growth, 0.0)
+        assertFalse(baby.dead)
+    }
+
+    @Test
+    fun `renaming trims valid names and keeps the old name for blank input`() {
+        val original = FishState(name = "Bubbles")
+
+        assertEquals("Mango", FishSimulator.rename(original, "  Mango  ").name)
+        assertEquals("Bubbles", FishSimulator.rename(original, "   ").name)
     }
 }

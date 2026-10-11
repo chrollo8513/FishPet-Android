@@ -7,6 +7,17 @@ import kotlin.math.sin
 
 enum class SwimmingState { HEALTHY, HUNGRY, STARVING, CRITICAL, DEAD }
 
+enum class EatingPhase { DROP, APPROACH, BITE, CELEBRATE }
+
+data class FishHudPosition(val x: Float, val y: Float)
+
+object FishHudLayout {
+    fun position(pose: SwimmingPose, bodyHeight: Float): FishHudPosition = FishHudPosition(
+        x = 100f + pose.horizontalFraction * 520f,
+        y = 210f + pose.bobOffset - bodyHeight * .70f - 26f,
+    )
+}
+
 data class SwimmingPose(
     val horizontalFraction: Float,
     val bobOffset: Float,
@@ -17,6 +28,7 @@ data class SwimmingPose(
     val energy: Float,
     val tempo: Float,
     val isEating: Boolean,
+    val eatingPhase: EatingPhase? = null,
 )
 
 /**
@@ -51,8 +63,20 @@ object FishMotion {
         val turnCompression = max(.18f, abs(direction))
 
         if (eating) {
+            val phaseProgress = feedingProgress(state, nowMillis)
+            val eatingPhase = when {
+                phaseProgress < .24f -> EatingPhase.DROP
+                phaseProgress < .52f -> EatingPhase.APPROACH
+                phaseProgress < .84f -> EatingPhase.BITE
+                else -> EatingPhase.CELEBRATE
+            }
             val bite = sin(phase * 5.0).toFloat()
-            return SwimmingPose(.63f, bite * 2f, bite * 8f, bite * 5f, -8f, 1f, energy, tempo, true)
+            return when (eatingPhase) {
+                EatingPhase.DROP -> SwimmingPose(.52f, bite * 2f, bite * 7f, bite * 4f, -3f, 1f, energy, tempo, true, eatingPhase)
+                EatingPhase.APPROACH -> SwimmingPose(.58f, bite * 3f, bite * 13f, bite * 7f, -6f, 1f, energy, tempo, true, eatingPhase)
+                EatingPhase.BITE -> SwimmingPose(.63f, bite * 2f, bite * 8f, bite * 5f, -8f, 1f, energy, tempo, true, eatingPhase)
+                EatingPhase.CELEBRATE -> SwimmingPose(.65f, bite * 5f, bite * 18f, bite * 11f, -2f, 1f, energy, tempo, true, eatingPhase)
+            }
         }
         return SwimmingPose(
             horizontalFraction = .50f + travel * .30f,
@@ -65,5 +89,10 @@ object FishMotion {
             tempo = tempo,
             isEating = false,
         )
+    }
+
+    private fun feedingProgress(state: FishState, nowMillis: Long): Float {
+        val durationMillis = max(1L, state.feedingSceneUntilSeconds - state.lastFedAtSeconds) * 1_000L
+        return ((nowMillis - state.lastFedAtSeconds * 1_000L).toFloat() / durationMillis).coerceIn(0f, 1f)
     }
 }

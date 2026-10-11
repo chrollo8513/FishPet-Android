@@ -1,8 +1,8 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-    <application android:allowBackup="true" android:label="MheyFish" android:theme="@android:style/Theme.Material.Light.NoActionBar" android:supportsRtl="true">
+    <application android:allowBackup="true" android:icon="@mipmap/ic_launcher" android:label="MheyFish" android:roundIcon="@mipmap/ic_launcher_round" android:theme="@android:style/Theme.Material.Light.NoActionBar" android:supportsRtl="true">
         <activity android:name=".MainActivity" android:exported="true"><intent-filter><action android:name="android.intent.action.MAIN"/><category android:name="android.intent.category.LAUNCHER"/></intent-filter></activity>
         <receiver android:name=".FishWidget" android:exported="true">
-            <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE"/><action android:name="com.example.fishpet.FEED"/><action android:name="com.example.fishpet.PET"/><action android:name="com.example.fishpet.CLEAR_FEEDING_SCENE"/></intent-filter>
+            <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE"/><action android:name="com.example.fishpet.FEED"/><action android:name="com.example.fishpet.PET"/><action android:name="com.example.fishpet.ADVANCE_SCENE"/></intent-filter>
             <meta-data android:name="android.appwidget.provider" android:resource="@xml/fish_widget_info"/>
         </receiver>
     </application>

@@ -50,4 +50,19 @@ class FishMotionTest {
         assertTrue(pose.isEating)
         assertTrue(pose.horizontalFraction > 0.5f)
     }
+
+    @Test
+    fun `floating care badges remain above and follow the fish pose`() {
+        val left = FishHudLayout.position(
+            SwimmingPose(.25f, 2f, 0f, 0f, 0f, 1f, 1f, 1f, false),
+            bodyHeight = 60f,
+        )
+        val right = FishHudLayout.position(
+            SwimmingPose(.70f, -3f, 0f, 0f, 0f, 1f, 1f, 1f, false),
+            bodyHeight = 60f,
+        )
+
+        assertTrue(left.y < 210f)
+        assertTrue(right.x > left.x)
+    }
 }
