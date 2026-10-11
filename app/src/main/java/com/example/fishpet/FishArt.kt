@@ -3,32 +3,243 @@ package com.example.fishpet
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
+import android.graphics.LinearGradient
 import android.graphics.Paint
 import android.graphics.Path
 import android.graphics.RectF
+import android.graphics.Shader
+import kotlin.math.max
+import kotlin.math.sin
 
 object FishArt {
-    fun render(s: FishState): Bitmap {
-        val bmp = Bitmap.createBitmap(480, 230, Bitmap.Config.ARGB_8888)
-        val c = Canvas(bmp)
-        val p = Paint(Paint.ANTI_ALIAS_FLAG)
-        p.color = Color.rgb(18, 83, 124); c.drawRoundRect(RectF(0f,0f,480f,230f),28f,28f,p)
-        p.color = Color.rgb(29,120,152)
-        for (i in 0..5) c.drawCircle(38f + i * 80, 36f + (i % 3) * 27, 7f + i % 3, p)
-        p.color = Color.rgb(35,130,113)
-        for (i in 0..6) c.drawOval(15f+i*76,165f-(i%3)*28,30f+i*76,245f,p)
-        val scale = when(s.stage) { "Baby" -> .60f; "Juvenile" -> .82f; else -> 1f }
-        c.save(); c.translate(240f,120f); c.scale(scale,scale)
-        p.color = if (s.dead) Color.GRAY else if(s.mood == "Sick") Color.rgb(177,140,82) else Color.rgb(255,160,51)
-        val tail = Path().apply { moveTo(-65f,0f); lineTo(-135f,-50f); lineTo(-125f,55f); close() }
-        c.drawPath(tail,p)
-        c.drawOval(-85f,-48f,85f,48f,p)
-        p.color = Color.rgb(255,204,103); c.drawOval(-10f,-42f,50f,40f,p)
-        p.color = Color.WHITE; c.drawCircle(45f,-13f,13f,p)
-        p.color = Color.rgb(12,31,47); c.drawCircle(49f,-13f,6f,p)
-        if(s.dead) { p.color = Color.BLACK; p.strokeWidth = 4f; c.drawLine(36f,-22f,54f,-4f,p); c.drawLine(54f,-22f,36f,-4f,p) }
-        p.color = Color.rgb(18,49,65); c.drawArc(RectF(52f,4f,71f,21f),0f,180f,false,p)
-        c.restore()
-        return bmp
+    private const val WIDTH = 720
+    private const val HEIGHT = 400
+    private const val BITMAP_WIDTH = 480
+    private const val BITMAP_HEIGHT = 267
+
+    fun render(
+        state: FishState,
+        nowSeconds: Long = System.currentTimeMillis() / 1000L,
+        motionTimeMillis: Long = nowSeconds * 1000L,
+    ): Bitmap {
+        val bitmap = Bitmap.createBitmap(BITMAP_WIDTH, BITMAP_HEIGHT, Bitmap.Config.ARGB_8888)
+        draw(Canvas(bitmap), state, nowSeconds, motionTimeMillis, BITMAP_WIDTH.toFloat(), BITMAP_HEIGHT.toFloat())
+        return bitmap
+    }
+
+    fun draw(canvas: Canvas, state: FishState, nowSeconds: Long, motionTimeMillis: Long, width: Float, height: Float) {
+        val paint = Paint(Paint.ANTI_ALIAS_FLAG)
+        canvas.save()
+        canvas.scale(width / WIDTH, height / HEIGHT)
+        val bounds = RectF(0f, 0f, WIDTH.toFloat(), HEIGHT.toFloat())
+        canvas.clipPath(Path().apply { addRoundRect(bounds, 42f, 42f, Path.Direction.CW) })
+        drawWater(canvas, paint, state, nowSeconds, motionTimeMillis)
+        drawScenery(canvas, paint, motionTimeMillis)
+        drawBubbles(canvas, paint, motionTimeMillis)
+        drawFood(canvas, paint, state, nowSeconds, motionTimeMillis)
+        drawFish(canvas, paint, state, motionTimeMillis)
+        canvas.restore()
+    }
+
+    private fun drawWater(canvas: Canvas, paint: Paint, state: FishState, nowSeconds: Long, motionTimeMillis: Long) {
+        paint.shader = LinearGradient(0f, 0f, 0f, HEIGHT.toFloat(), intArrayOf(
+            Color.rgb(118, 223, 245), Color.rgb(38, 153, 205), Color.rgb(15, 84, 147)
+        ), null, Shader.TileMode.CLAMP)
+        canvas.drawRect(0f, 0f, WIDTH.toFloat(), HEIGHT.toFloat(), paint)
+        paint.shader = null
+        paint.color = Color.argb(78, 255, 255, 255)
+        canvas.drawRect(0f, 0f, WIDTH.toFloat(), 18f, paint)
+        paint.strokeWidth = 4f
+        paint.style = Paint.Style.STROKE
+        paint.color = Color.argb(130, 225, 252, 255)
+        for (offset in 0..3) {
+            val y = 18f + offset * 7f
+            canvas.drawArc(RectF(-90f + offset * 54f, y - 10f, 270f + offset * 54f, y + 18f), 195f, 150f, false, paint)
+        }
+        if (state.isFeeding(nowSeconds)) {
+            val duration = max(1L, state.feedingSceneUntilSeconds - state.lastFedAtSeconds)
+            val elapsed = (motionTimeMillis - state.lastFedAtSeconds * 1000L).coerceIn(0L, duration * 1000L)
+            val progress = elapsed.toFloat() / (duration * 1000L)
+            val radius = 14f + progress * 58f
+            paint.strokeWidth = 3f
+            paint.color = Color.argb(((1f - progress) * 175f).toInt(), 242, 255, 255)
+            canvas.drawOval(RectF(355f - radius, 28f - radius * .23f, 355f + radius, 28f + radius * .23f), paint)
+        }
+        paint.style = Paint.Style.FILL
+        paint.color = Color.argb(28, 255, 255, 255)
+        canvas.drawOval(-110f, 56f, 210f, 330f, paint)
+        canvas.drawOval(420f, 95f, 810f, 410f, paint)
+    }
+
+    private fun drawScenery(canvas: Canvas, paint: Paint, motionTimeMillis: Long) {
+        paint.color = Color.rgb(16, 103, 109)
+        canvas.drawOval(-50f, 300f, 220f, 455f, paint)
+        canvas.drawOval(440f, 310f, 790f, 465f, paint)
+        paint.color = Color.rgb(27, 120, 105)
+        val sway = sin(motionTimeMillis / 1000.0 * Math.PI * 2.0 / 7.0).toFloat() * 5f
+        repeat(7) { index ->
+            val x = 55f + index * 96f
+            val height = 72f + (index % 3) * 28f
+            val plant = Path().apply {
+                moveTo(x, 372f)
+                cubicTo(x - 22f, 334f, x + sway - 22f, 326f - height, x + sway, 286f - height)
+                cubicTo(x + 25f, 325f - height, x + 24f, 352f, x + 16f, 372f)
+                close()
+            }
+            canvas.drawPath(plant, paint)
+            paint.color = Color.rgb(39, 150, 120)
+            canvas.drawOval(x - 17f, 324f - height / 2f, x + 9f, 365f - height / 2f, paint)
+            paint.color = Color.rgb(27, 120, 105)
+        }
+        drawRock(canvas, paint, 104f, 349f, 72f, Color.rgb(67, 98, 121))
+        drawRock(canvas, paint, 567f, 356f, 100f, Color.rgb(57, 87, 108))
+        drawRock(canvas, paint, 644f, 364f, 55f, Color.rgb(91, 119, 135))
+        paint.color = Color.rgb(201, 173, 117)
+        canvas.drawOval(0f, 366f, WIDTH.toFloat(), 438f, paint)
+        paint.color = Color.argb(60, 255, 255, 255)
+        repeat(9) { index -> canvas.drawCircle(42f + index * 81f, 378f + (index % 3) * 6f, 3f, paint) }
+    }
+
+    private fun drawRock(canvas: Canvas, paint: Paint, x: Float, y: Float, size: Float, color: Int) {
+        paint.color = color
+        canvas.drawOval(x - size, y - size * .55f, x + size, y + size * .55f, paint)
+        paint.color = Color.argb(55, 255, 255, 255)
+        canvas.drawOval(x - size * .48f, y - size * .36f, x + size * .14f, y - size * .03f, paint)
+    }
+
+    private fun drawBubbles(canvas: Canvas, paint: Paint, motionTimeMillis: Long) {
+        paint.style = Paint.Style.STROKE
+        paint.strokeWidth = 3f
+        paint.color = Color.argb(180, 225, 255, 255)
+        repeat(13) { index ->
+            val x = 48f + (index * 113 % 645)
+            val baseY = 330f - (index * 47 % 260)
+            val drift = ((motionTimeMillis / 1000f + index * 3f) % 18f) * 2f
+            val radius = 4f + index % 4 * 2f
+            canvas.drawCircle(x, max(34f, baseY - drift), radius, paint)
+        }
+        paint.style = Paint.Style.FILL
+    }
+
+    private fun drawFood(canvas: Canvas, paint: Paint, state: FishState, nowSeconds: Long, motionTimeMillis: Long) {
+        if (!state.isFeeding(nowSeconds)) return
+        val duration = max(1L, state.feedingSceneUntilSeconds - state.lastFedAtSeconds)
+        val elapsed = (motionTimeMillis - state.lastFedAtSeconds * 1000L).coerceIn(0L, duration * 1000L)
+        val progress = elapsed.toFloat() / (duration * 1000L)
+        val y = 40f + progress * 165f
+        paint.color = Color.rgb(118, 72, 28)
+        repeat(5) { index ->
+            canvas.drawCircle(306f + index * 23f, y + (index % 2) * 13f, 8f, paint)
+        }
+    }
+
+    private fun drawFish(canvas: Canvas, paint: Paint, state: FishState, motionTimeMillis: Long) {
+        val stageScale = when (state.stage()) {
+            GrowthStage.BABY -> .62f
+            GrowthStage.JUVENILE -> .82f
+            GrowthStage.ADULT -> 1f
+        }
+        val slimness = (0.60f + state.health.toFloat() / 250f - max(0.0, state.hunger - 65.0).toFloat() / 220f).coerceIn(.50f, 1f)
+        val bodyWidth = 178f * stageScale * slimness
+        val bodyHeight = 100f * stageScale * slimness
+        val pose = FishMotion.pose(state, motionTimeMillis)
+        val bodyColor = fishColor(state)
+        val finColor = blend(bodyColor, Color.rgb(255, 230, 132), .38f)
+        val finDroop = when (state.swimmingState) {
+            SwimmingState.STARVING -> 16f
+            SwimmingState.CRITICAL -> 25f
+            else -> 0f
+        }
+        canvas.save()
+        canvas.translate(100f + pose.horizontalFraction * 520f, 210f + pose.bobOffset)
+        canvas.scale(pose.facingScaleX, 1f)
+        canvas.rotate(pose.bodyTiltDegrees)
+
+        paint.color = finColor
+        canvas.save()
+        canvas.translate(-bodyWidth * .42f, 0f)
+        canvas.rotate(pose.tailAngleDegrees)
+        canvas.translate(bodyWidth * .42f, 0f)
+        canvas.drawPath(Path().apply {
+            moveTo(-bodyWidth * .45f, 0f)
+            lineTo(-bodyWidth * 1.08f, -bodyHeight * .65f)
+            lineTo(-bodyWidth * .96f, bodyHeight * .72f)
+            close()
+        }, paint)
+        canvas.restore()
+        canvas.save()
+        canvas.translate(-bodyWidth * .05f, -bodyHeight * .32f)
+        canvas.rotate(pose.finAngleDegrees + finDroop)
+        canvas.translate(bodyWidth * .05f, bodyHeight * .32f)
+        canvas.drawPath(Path().apply {
+            moveTo(-bodyWidth * .05f, -bodyHeight * .32f)
+            cubicTo(-bodyWidth * .14f, -bodyHeight * 1.02f, bodyWidth * .26f, -bodyHeight * .95f, bodyWidth * .38f, -bodyHeight * .35f)
+            close()
+        }, paint)
+        canvas.drawPath(Path().apply {
+            moveTo(0f, bodyHeight * .34f)
+            cubicTo(-bodyWidth * .06f, bodyHeight * .96f, bodyWidth * .35f, bodyHeight * .83f, bodyWidth * .49f, bodyHeight * .34f)
+            close()
+        }, paint)
+        canvas.restore()
+
+        paint.color = bodyColor
+        canvas.drawOval(-bodyWidth * .62f, -bodyHeight * .52f, bodyWidth * .70f, bodyHeight * .52f, paint)
+        paint.color = Color.argb(92, 255, 230, 143)
+        canvas.drawOval(-bodyWidth * .10f, -bodyHeight * .42f, bodyWidth * .58f, bodyHeight * .42f, paint)
+        paint.color = Color.argb(120, 255, 255, 255)
+        canvas.drawOval(bodyWidth * .10f, -bodyHeight * .38f, bodyWidth * .49f, -bodyHeight * .12f, paint)
+
+        val eyeSize = if (state.stage() == GrowthStage.BABY) bodyHeight * .20f else bodyHeight * .16f
+        drawEye(canvas, paint, bodyWidth * .42f, -bodyHeight * .19f, eyeSize, state.dead)
+        if (state.stage() == GrowthStage.BABY) drawEye(canvas, paint, bodyWidth * .20f, -bodyHeight * .24f, eyeSize * .78f, state.dead)
+        drawExpression(canvas, paint, state, bodyWidth, bodyHeight)
+        canvas.restore()
+    }
+
+    private fun drawEye(canvas: Canvas, paint: Paint, x: Float, y: Float, radius: Float, dead: Boolean) {
+        paint.color = Color.WHITE
+        canvas.drawCircle(x, y, radius, paint)
+        paint.color = Color.rgb(32, 48, 69)
+        if (dead) {
+            paint.strokeWidth = max(3f, radius * .30f)
+            canvas.drawLine(x - radius * .55f, y - radius * .55f, x + radius * .55f, y + radius * .55f, paint)
+            canvas.drawLine(x + radius * .55f, y - radius * .55f, x - radius * .55f, y + radius * .55f, paint)
+        } else {
+            canvas.drawCircle(x + radius * .16f, y, radius * .48f, paint)
+            paint.color = Color.WHITE
+            canvas.drawCircle(x + radius * .33f, y - radius * .22f, radius * .14f, paint)
+        }
+    }
+
+    private fun drawExpression(canvas: Canvas, paint: Paint, state: FishState, bodyWidth: Float, bodyHeight: Float) {
+        paint.style = Paint.Style.STROKE
+        paint.strokeWidth = max(3f, bodyHeight * .055f)
+        paint.strokeCap = Paint.Cap.ROUND
+        paint.color = Color.rgb(94, 56, 39)
+        val mouth = RectF(bodyWidth * .45f, bodyHeight * .08f, bodyWidth * .67f, bodyHeight * .31f)
+        when (state.mood) {
+            FishMood.HAPPY -> canvas.drawArc(mouth, 8f, 148f, false, paint)
+            FishMood.WORRIED -> canvas.drawArc(mouth, 208f, 124f, false, paint)
+            FishMood.SAD, FishMood.CRITICAL, FishMood.DEAD -> canvas.drawArc(mouth, 205f, 135f, false, paint)
+        }
+        paint.style = Paint.Style.FILL
+        paint.strokeCap = Paint.Cap.BUTT
+    }
+
+    private fun fishColor(state: FishState): Int = when {
+        state.dead -> Color.rgb(128, 139, 145)
+        state.mood == FishMood.CRITICAL -> Color.rgb(181, 160, 131)
+        state.mood == FishMood.SAD -> Color.rgb(225, 185, 118)
+        else -> Color.rgb(255, 143, 45)
+    }
+
+    private fun blend(first: Int, second: Int, amount: Float): Int {
+        val inverse = 1f - amount
+        return Color.rgb(
+            (Color.red(first) * inverse + Color.red(second) * amount).toInt(),
+            (Color.green(first) * inverse + Color.green(second) * amount).toInt(),
+            (Color.blue(first) * inverse + Color.blue(second) * amount).toInt(),
+        )
     }
 }
