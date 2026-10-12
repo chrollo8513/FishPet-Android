@@ -11,6 +11,20 @@ enum class FishMood(val label: String) { HAPPY("Happy"), WORRIED("Worried"), SAD
 
 enum class FeedResult { NONE, FED, COOLDOWN, DEAD }
 
+enum class FishReaction {
+    NONE,
+    WIGGLE,
+    BLINK,
+    RIPPLE,
+    HEART,
+    BUBBLES;
+
+    companion object {
+        fun random(): FishReaction = entries.filter { it != NONE }.random()
+        fun fromStorage(value: String): FishReaction = entries.firstOrNull { it.name == value } ?: NONE
+    }
+}
+
 enum class FishColor(val label: String, val red: Int, val green: Int, val blue: Int) {
     ORANGE("Orange", 255, 143, 45),
     GOLD("Gold", 247, 184, 55),
@@ -31,6 +45,7 @@ data class FishBalance(
     val feedHungerRestore: Double = 45.0,
     val feedHealthRestore: Double = 8.0,
     val feedingSceneSeconds: Long = 12L,
+    val reactionSceneSeconds: Long = 8L,
     val maxSimulatedElapsedSeconds: Long = 30L * 24L * 60L * 60L,
     val juvenileGrowthThreshold: Double = 25.0,
     val adultGrowthThreshold: Double = 75.0,
@@ -47,6 +62,8 @@ data class FishState(
     val bornAtSeconds: Long = updatedAtSeconds,
     val feedingSceneUntilSeconds: Long = 0L,
     val playfulSceneUntilSeconds: Long = 0L,
+    val reactionSceneUntilSeconds: Long = 0L,
+    val reaction: FishReaction = FishReaction.NONE,
     val foodEaten: Int = 0,
     val dead: Boolean = false,
 ) {
@@ -76,6 +93,7 @@ data class FishState(
     fun ageSeconds(nowSeconds: Long): Long = max(0L, nowSeconds - bornAtSeconds)
     fun isFeeding(nowSeconds: Long): Boolean = !dead && nowSeconds < feedingSceneUntilSeconds
     fun isPlayful(nowSeconds: Long): Boolean = !dead && nowSeconds < playfulSceneUntilSeconds
+    fun isReacting(nowSeconds: Long): Boolean = !dead && reaction != FishReaction.NONE && nowSeconds < reactionSceneUntilSeconds
 
     val swimmingState: SwimmingState
         get() = when {
@@ -92,19 +110,28 @@ data class FishUpdate(val state: FishState, val result: FeedResult = FeedResult.
 /** Calculates one best-effort widget refresh for the latest transient visual scene. */
 object FishSceneTiming {
     fun secondsUntilRefresh(state: FishState, nowSeconds: Long): Long? {
-        val latestSceneEnd = max(state.feedingSceneUntilSeconds, state.playfulSceneUntilSeconds)
+        val latestSceneEnd = max(state.feedingSceneUntilSeconds, max(state.playfulSceneUntilSeconds, state.reactionSceneUntilSeconds))
         return (latestSceneEnd - nowSeconds).takeIf { it > 0L }
     }
 
     fun nextRefreshAtSeconds(state: FishState, nowSeconds: Long): Long? {
+        val candidates = mutableListOf<Long>()
         if (state.isFeeding(nowSeconds)) {
             val duration = max(1L, state.feedingSceneUntilSeconds - state.lastFedAtSeconds)
-            val frames = listOf(duration / 4L, duration / 2L, duration * 3L / 4L)
+            val frames = listOf(duration / 4L, duration * 7L / 12L, duration * 11L / 12L)
                 .map { state.lastFedAtSeconds + it }
-            frames.firstOrNull { it > nowSeconds }?.let { return it }
+            frames.firstOrNull { it > nowSeconds }?.let(candidates::add)
         }
-        val latestSceneEnd = max(state.feedingSceneUntilSeconds, state.playfulSceneUntilSeconds)
-        return latestSceneEnd.takeIf { it > nowSeconds }
+        if (state.isReacting(nowSeconds)) {
+            val start = state.reactionSceneUntilSeconds - FishBalance().reactionSceneSeconds
+            (1L until FishBalance().reactionSceneSeconds)
+                .map { start + it }
+                .firstOrNull { it > nowSeconds }
+                ?.let(candidates::add)
+        }
+        val latestSceneEnd = max(state.feedingSceneUntilSeconds, max(state.playfulSceneUntilSeconds, state.reactionSceneUntilSeconds))
+        latestSceneEnd.takeIf { it > nowSeconds }?.let(candidates::add)
+        return candidates.minOrNull()
     }
 }
 
@@ -166,9 +193,21 @@ object FishSimulator {
         )
     }
 
-    fun pet(initial: FishState, nowSeconds: Long): FishState {
+    fun pet(
+        initial: FishState,
+        nowSeconds: Long,
+        reaction: FishReaction = FishReaction.random(),
+    ): FishState {
         val advanced = advance(initial, nowSeconds)
-        return if (advanced.dead) advanced else advanced.copy(playfulSceneUntilSeconds = nowSeconds + 8L)
+        return if (advanced.dead) {
+            advanced.copy(reaction = FishReaction.NONE, reactionSceneUntilSeconds = 0L)
+        } else {
+            advanced.copy(
+                playfulSceneUntilSeconds = nowSeconds + FishBalance().reactionSceneSeconds,
+                reactionSceneUntilSeconds = nowSeconds + FishBalance().reactionSceneSeconds,
+                reaction = reaction.takeUnless { it == FishReaction.NONE } ?: FishReaction.WIGGLE,
+            )
+        }
     }
 
     fun newBaby(nowSeconds: Long, color: FishColor = FishColor.ORANGE): FishState = FishState(

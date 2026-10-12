@@ -52,6 +52,29 @@ class FishMotionTest {
     }
 
     @Test
+    fun `bite frame opens the mouth for a visible swallow`() {
+        val pose = FishMotion.pose(
+            FishState(lastFedAtSeconds = 100L, feedingSceneUntilSeconds = 112L),
+            nowMillis = 107_500L,
+        )
+
+        assertEquals(EatingPhase.BITE, pose.eatingPhase)
+        assertTrue(pose.mouthOpenFraction > .5f)
+    }
+
+    @Test
+    fun `heart reaction exposes a bounded decorative pose`() {
+        val pose = FishMotion.pose(
+            FishState(reaction = FishReaction.HEART, reactionSceneUntilSeconds = 108L),
+            nowMillis = 102_000L,
+        )
+
+        assertEquals(FishReaction.HEART, pose.reaction)
+        assertTrue(pose.reactionProgress in 0f..1f)
+        assertTrue(pose.bobOffset < 0f)
+    }
+
+    @Test
     fun `floating care badges remain above and follow the fish pose`() {
         val left = FishHudLayout.position(
             SwimmingPose(.25f, 2f, 0f, 0f, 0f, 1f, 1f, 1f, false),

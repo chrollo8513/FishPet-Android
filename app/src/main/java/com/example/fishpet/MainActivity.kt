@@ -3,6 +3,7 @@ package com.example.fishpet
 import android.app.Activity
 import android.app.AlertDialog
 import android.graphics.Color
+import android.graphics.drawable.GradientDrawable
 import android.os.Bundle
 import android.text.InputType
 import android.view.Gravity
@@ -28,12 +29,22 @@ class MainActivity : Activity() {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER_HORIZONTAL
             setPadding(padding, padding, padding, padding)
-            setBackgroundColor(Color.rgb(5, 42, 73))
+            background = GradientDrawable(
+                GradientDrawable.Orientation.TL_BR,
+                intArrayOf(Color.rgb(4, 30, 58), Color.rgb(6, 67, 103), Color.rgb(4, 27, 55)),
+            )
         }
         val title = TextView(this).apply {
-            text = "MheyFish Aquarium"
-            textSize = 28f
+            text = "MheyFish · Live Aquarium"
+            textSize = 26f
             setTextColor(Color.WHITE)
+            gravity = Gravity.CENTER
+            setTypeface(typeface, android.graphics.Typeface.BOLD)
+        }
+        val subtitle = TextView(this).apply {
+            text = "Your widget pet, swimming live"
+            textSize = 14f
+            setTextColor(Color.rgb(176, 231, 246))
             gravity = Gravity.CENTER
         }
         fish = AquariumPreviewView(this).apply { contentDescription = "Animated preview of your virtual aquarium" }
@@ -42,6 +53,12 @@ class MainActivity : Activity() {
             setTextColor(Color.rgb(213, 244, 255))
             gravity = Gravity.CENTER
             setLineSpacing(5f, 1f)
+            setPadding(padding / 2, padding / 2, padding / 2, padding / 2)
+            background = GradientDrawable().apply {
+                setColor(Color.argb(118, 5, 35, 61))
+                cornerRadius = 18f * resources.displayMetrics.density
+                setStroke((1 * resources.displayMetrics.density).toInt(), Color.argb(105, 142, 222, 242))
+            }
         }
         feed = Button(this).apply { text = "Feed" }
         rename = Button(this).apply { text = "Rename Fish" }
@@ -61,8 +78,9 @@ class MainActivity : Activity() {
         }
         sound.setOnCheckedChangeListener { _, enabled -> FishSoundSettings.setEnabled(this, enabled) }
         root.addView(title, LinearLayout.LayoutParams(-1, -2))
-        root.addView(fish, LinearLayout.LayoutParams(-1, (290 * resources.displayMetrics.density).toInt()))
-        root.addView(info, LinearLayout.LayoutParams(-1, -2))
+        root.addView(subtitle, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = (8 * resources.displayMetrics.density).toInt() })
+        root.addView(fish, LinearLayout.LayoutParams(-1, (310 * resources.displayMetrics.density).toInt()))
+        root.addView(info, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = (8 * resources.displayMetrics.density).toInt() })
         root.addView(sound, LinearLayout.LayoutParams(-2, -2))
         root.addView(feed, LinearLayout.LayoutParams(-2, -2))
         root.addView(rename, LinearLayout.LayoutParams(-2, -2))
@@ -96,12 +114,12 @@ class MainActivity : Activity() {
         val now = System.currentTimeMillis() / 1000L
         fish.fishState = state
         info.text = buildString {
-            append("${state.name} - ${state.stage().label} ${state.color.label}\n")
-            append("${state.mood.label} - Age ${ageText(state.ageSeconds(now))} - Growth ${state.growth.toInt()}%\n")
-            append("Hunger ${state.hungerStatus.label} ${state.hunger.toInt()}% - Health ${state.health.toInt()}%\n")
+            append("${state.name} · ${state.stage().label} ${state.color.label}\n")
+            append("${state.mood.label} · Age ${ageText(state.ageSeconds(now))} · Growth ${state.growth.toInt()}%\n")
+            append("Hunger ${state.hungerStatus.label} ${state.hunger.toInt()}%  •  Health ${state.health.toInt()}%\n")
             append("Meals served ${state.foodEaten}\n\n")
-            append(if (state.dead) "${state.name} has passed on. Start a new baby fish when you are ready." else "Keep ${state.name} fed to support healthy growth.")
-            append("\n\nHome screen setup: long-press an empty area, then Widgets, then MheyFish.")
+            append(if (state.dead) "${state.name} has passed on. Start a new baby fish when you are ready." else "The live view keeps swimming while this screen is open. Feed in either place to sync the same pet.")
+            append("\n\nWidget: long-press home screen → Widgets → MheyFish. Tap the fish for a short reaction.")
         }
         feed.isEnabled = !state.dead
         feed.text = if (state.dead) "${state.name} is resting" else "Feed ${state.name}"

@@ -115,13 +115,14 @@ class FishSimulationTest {
     }
 
     @Test
-    fun `feeding schedules only a few event frames before restoring the normal pose`() {
+    fun `feeding schedules a final celebration frame before restoring the normal pose`() {
         val state = FishState(lastFedAtSeconds = 100L, feedingSceneUntilSeconds = 112L)
 
         assertEquals(103L, FishSceneTiming.nextRefreshAtSeconds(state, nowSeconds = 100L))
-        assertEquals(106L, FishSceneTiming.nextRefreshAtSeconds(state, nowSeconds = 103L))
-        assertEquals(109L, FishSceneTiming.nextRefreshAtSeconds(state, nowSeconds = 106L))
-        assertEquals(112L, FishSceneTiming.nextRefreshAtSeconds(state, nowSeconds = 109L))
+        assertEquals(107L, FishSceneTiming.nextRefreshAtSeconds(state, nowSeconds = 103L))
+        assertEquals(111L, FishSceneTiming.nextRefreshAtSeconds(state, nowSeconds = 107L))
+        assertEquals(EatingPhase.CELEBRATE, FishMotion.pose(state, nowMillis = 111_000L).eatingPhase)
+        assertEquals(112L, FishSceneTiming.nextRefreshAtSeconds(state, nowSeconds = 111L))
     }
 
     @Test
@@ -132,6 +133,33 @@ class FishSimulationTest {
         assertTrue(lively.isPlayful(107L))
         assertFalse(lively.isPlayful(108L))
         assertFalse(dead.isPlayful(101L))
+    }
+
+    @Test
+    fun `pet interaction persists its selected reaction and schedules short scene frames`() {
+        val reacted = FishSimulator.pet(
+            FishState(updatedAtSeconds = 100L),
+            nowSeconds = 100L,
+            reaction = FishReaction.HEART,
+        )
+
+        assertEquals(FishReaction.HEART, reacted.reaction)
+        assertTrue(reacted.isReacting(103L))
+        assertEquals(101L, FishSceneTiming.nextRefreshAtSeconds(reacted, nowSeconds = 100L))
+        assertEquals(104L, FishSceneTiming.nextRefreshAtSeconds(reacted, nowSeconds = 103L))
+        assertEquals(null, FishSceneTiming.nextRefreshAtSeconds(reacted, nowSeconds = 108L))
+    }
+
+    @Test
+    fun `dead fish does not start the requested reaction`() {
+        val dead = FishSimulator.pet(
+            FishState(dead = true, health = 0.0, updatedAtSeconds = 100L),
+            nowSeconds = 100L,
+            reaction = FishReaction.RIPPLE,
+        )
+
+        assertEquals(FishReaction.NONE, dead.reaction)
+        assertFalse(dead.isReacting(101L))
     }
 
     @Test

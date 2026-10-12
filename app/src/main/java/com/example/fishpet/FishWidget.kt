@@ -95,6 +95,7 @@ class FishWidget : AppWidgetProvider() {
             result == FeedResult.FED || state.isFeeding(now) -> "${state.name} is eating!"
             result == FeedResult.DEAD || state.dead -> "This fish has passed on. Reset in the app."
             result == FeedResult.COOLDOWN -> "Tiny tummy is resting - try again soon."
+            state.isReacting(now) -> "${state.name} is feeling playful!"
             else -> "${state.name} - ${state.mood.label}"
         }
 

@@ -29,6 +29,10 @@ data class SwimmingPose(
     val tempo: Float,
     val isEating: Boolean,
     val eatingPhase: EatingPhase? = null,
+    val mouthOpenFraction: Float = 0f,
+    val eyeBlinkFraction: Float = 0f,
+    val reaction: FishReaction = FishReaction.NONE,
+    val reactionProgress: Float = 0f,
 )
 
 /**
@@ -72,13 +76,13 @@ object FishMotion {
             }
             val bite = sin(phase * 5.0).toFloat()
             return when (eatingPhase) {
-                EatingPhase.DROP -> SwimmingPose(.52f, bite * 2f, bite * 7f, bite * 4f, -3f, 1f, energy, tempo, true, eatingPhase)
-                EatingPhase.APPROACH -> SwimmingPose(.58f, bite * 3f, bite * 13f, bite * 7f, -6f, 1f, energy, tempo, true, eatingPhase)
-                EatingPhase.BITE -> SwimmingPose(.63f, bite * 2f, bite * 8f, bite * 5f, -8f, 1f, energy, tempo, true, eatingPhase)
-                EatingPhase.CELEBRATE -> SwimmingPose(.65f, bite * 5f, bite * 18f, bite * 11f, -2f, 1f, energy, tempo, true, eatingPhase)
+                EatingPhase.DROP -> SwimmingPose(.52f, bite * 2f, bite * 7f, bite * 4f, -3f, 1f, energy, tempo, true, eatingPhase, .08f)
+                EatingPhase.APPROACH -> SwimmingPose(.58f, bite * 3f, bite * 13f, bite * 7f, -6f, 1f, energy, tempo, true, eatingPhase, .20f)
+                EatingPhase.BITE -> SwimmingPose(.63f, bite * 2f, bite * 8f, bite * 5f, -8f, 1f, energy, tempo, true, eatingPhase, .70f + abs(bite) * .25f)
+                EatingPhase.CELEBRATE -> SwimmingPose(.65f, bite * 5f, bite * 18f, bite * 11f, -2f, 1f, energy, tempo, true, eatingPhase, .28f)
             }
         }
-        return SwimmingPose(
+        val base = SwimmingPose(
             horizontalFraction = .50f + travel * .30f,
             bobOffset = sin(phase * 2.0).toFloat() * 7f * energy,
             tailAngleDegrees = sin(phase * 6.0).toFloat() * (22f * energy + if (playing) 5f else 0f),
@@ -89,10 +93,49 @@ object FishMotion {
             tempo = tempo,
             isEating = false,
         )
+        if (!state.isReacting(nowSeconds)) return base
+
+        val reactionProgress = reactionProgress(state, nowSeconds)
+        return when (state.reaction) {
+            FishReaction.WIGGLE -> base.copy(
+                tailAngleDegrees = sin(reactionProgress * Math.PI * 6.0).toFloat() * 34f,
+                bodyTiltDegrees = sin(reactionProgress * Math.PI * 6.0).toFloat() * 8f,
+                reaction = state.reaction,
+                reactionProgress = reactionProgress,
+            )
+            FishReaction.BLINK -> base.copy(
+                eyeBlinkFraction = if (reactionProgress in .22f..58f) 1f else .10f,
+                reaction = state.reaction,
+                reactionProgress = reactionProgress,
+            )
+            FishReaction.RIPPLE -> base.copy(
+                bobOffset = -4f + sin(reactionProgress * Math.PI * 4.0).toFloat() * 8f,
+                reaction = state.reaction,
+                reactionProgress = reactionProgress,
+            )
+            FishReaction.HEART -> base.copy(
+                bobOffset = -12f,
+                finAngleDegrees = 18f,
+                reaction = state.reaction,
+                reactionProgress = reactionProgress,
+            )
+            FishReaction.BUBBLES -> base.copy(
+                bobOffset = -6f,
+                reaction = state.reaction,
+                reactionProgress = reactionProgress,
+            )
+            FishReaction.NONE -> base
+        }
     }
 
     private fun feedingProgress(state: FishState, nowMillis: Long): Float {
         val durationMillis = max(1L, state.feedingSceneUntilSeconds - state.lastFedAtSeconds) * 1_000L
         return ((nowMillis - state.lastFedAtSeconds * 1_000L).toFloat() / durationMillis).coerceIn(0f, 1f)
+    }
+
+    private fun reactionProgress(state: FishState, nowSeconds: Long): Float {
+        val duration = FishBalance().reactionSceneSeconds.coerceAtLeast(1L)
+        val startedAt = state.reactionSceneUntilSeconds - duration
+        return ((nowSeconds - startedAt).toFloat() / duration).coerceIn(0f, 1f)
     }
 }

@@ -65,6 +65,8 @@ object FishStore {
             bornAtSeconds = objectValue.optLong("bornAtSeconds", updated),
             feedingSceneUntilSeconds = objectValue.optLong("feedingSceneUntilSeconds", 0L),
             playfulSceneUntilSeconds = objectValue.optLong("playfulSceneUntilSeconds", 0L),
+            reactionSceneUntilSeconds = objectValue.optLong("reactionSceneUntilSeconds", 0L),
+            reaction = FishReaction.fromStorage(objectValue.optString("reaction", FishReaction.NONE.name)),
             foodEaten = objectValue.optInt("foodEaten", 0),
             dead = objectValue.optBoolean("dead", false),
         )
@@ -82,6 +84,8 @@ object FishStore {
             .put("bornAtSeconds", state.bornAtSeconds)
             .put("feedingSceneUntilSeconds", state.feedingSceneUntilSeconds)
             .put("playfulSceneUntilSeconds", state.playfulSceneUntilSeconds)
+            .put("reactionSceneUntilSeconds", state.reactionSceneUntilSeconds)
+            .put("reaction", state.reaction.name)
             .put("foodEaten", state.foodEaten)
             .put("dead", state.dead)
             .toString()
